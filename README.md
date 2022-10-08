@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="erc1155.jpg" width="350" title="ERC1155 is a great token standard to hold both fungible and non-fungible tokens!">
+</p>
+
 # The ERC1155 - Delivered as a Yul Present!
 
 This is a pure Yul implementation of the ERC1155 Token contract.
