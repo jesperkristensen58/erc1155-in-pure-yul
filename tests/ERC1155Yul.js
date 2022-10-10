@@ -18,7 +18,7 @@ describe("ERC1155Yul", function () {
     var bytecode = require('../build/ERC1155Yul.bytecode.json').object;
 
     // Contracts are deployed using the first signer/account by default
-    [owner, alice] = await ethers.getSigners();
+    [owner, alice, bob] = await ethers.getSigners();
 
     const ERC1155YulContract = await hre.ethers.getContractFactory(abi, bytecode);
     erc1155yul = await ERC1155YulContract.deploy("https://token-cdn-domain/{id}.json"); // @note the argument is not actually used (hardcoded in the constructor)
@@ -34,14 +34,14 @@ describe("ERC1155Yul", function () {
   });
 
   describe("Runtime", function () {
-    it("Should allow minting", async function () {
+    it("Should allow minting and getting balanceOf", async function () {
       let tx = await erc1155yul.mint(alice.address, 1, 4);
       await tx.wait();
 
       // check that balance was correctly set
       expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(4);
     });
-    
+
     it("Should allow repeated minting", async function () {
       let tx = await erc1155yul.mint(alice.address, 1, 4);
       await tx.wait();
@@ -54,6 +54,56 @@ describe("ERC1155Yul", function () {
   
       // check that balance was correctly set
       expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(12);
+    });
+
+    it("Should allow getting balanceOf", async function () {
+      let tx = await erc1155yul.mint(alice.address, 1, 4);
+      await tx.wait();
+
+      // check that balance was correctly set
+      expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(4);
+      // check that balance was correctly set
+      expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+      
+      // try multiple Ids
+      tx = await erc1155yul.mint(bob.address, 2, 2);
+      await tx.wait();
+
+      // check that balance was correctly set
+      expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(4);
+      // check that balance was correctly set
+      expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+      expect(await erc1155yul.balanceOf(bob.address, 2)).to.equal(2);
+    });
+
+
+    it("Should allow getting balanceOfBatch", async function () {
+      let tx = await erc1155yul.mint(alice.address, 1, 6);
+      await tx.wait();
+
+      tx = await erc1155yul.mint(bob.address, 2, 2);
+      await tx.wait();
+
+      // check that balance was correctly set
+      expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(6);
+      expect(await erc1155yul.balanceOfBatch([alice.address], [1])).to.deep.equal([6]);
+
+      expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+      expect(await erc1155yul.balanceOfBatch([bob.address], [1])).to.deep.equal([0]);
+
+      expect(await erc1155yul.balanceOf(bob.address, 2)).to.equal(2);
+      expect(await erc1155yul.balanceOfBatch([bob.address], [2])).to.deep.equal([2]);
+
+      // send in multiple addresses
+      expect(await erc1155yul.balanceOfBatch([alice.address, bob.address], [1, 2])).to.deep.equal([6, 2]);
+
+      tx = await erc1155yul.mint(alice.address, 4, 21);
+      await tx.wait();
+
+      expect(await erc1155yul.balanceOfBatch([alice.address, bob.address, alice.address], [1, 2, 4])).to.deep.equal([6, 2, 21]);
+
+      // order shouldn't matter
+      expect(await erc1155yul.balanceOfBatch([bob.address, alice.address, alice.address], [2, 4, 1])).to.deep.equal([2, 21, 6]);
     });
   });
 });
