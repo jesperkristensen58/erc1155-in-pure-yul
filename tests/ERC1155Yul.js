@@ -25,11 +25,35 @@ describe("ERC1155Yul", function () {
     await erc1155yul.deployed();
   })
 
-  describe.only("Deployment", function () {
+  describe("Deployment", function () {
     it("Should set the right hardcoded URI on deployment", async function () {
       expect(await erc1155yul.uri(0)).to.equal("https://token-cdn-domain/{id}.json");
       // any other account can access too
       expect(await erc1155yul.connect(alice).uri(0)).to.equal("https://token-cdn-domain/{id}.json");
+    });
+  });
+
+  describe("Runtime", function () {
+    it("Should allow minting", async function () {
+      let tx = await erc1155yul.mint(alice.address, 1, 4);
+      await tx.wait();
+
+      // check that balance was correctly set
+      expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(4);
+    });
+    
+    it("Should allow repeated minting", async function () {
+      let tx = await erc1155yul.mint(alice.address, 1, 4);
+      await tx.wait();
+  
+      // check that balance was correctly set
+      expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(4);
+  
+      tx = await erc1155yul.mint(alice.address, 1, 8);
+      await tx.wait();
+  
+      // check that balance was correctly set
+      expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(12);
     });
   });
 });
