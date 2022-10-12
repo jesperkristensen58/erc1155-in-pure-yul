@@ -5,6 +5,7 @@
 # --- action
 echo "🚦 start"
 
+rm -f build/ERC1155Yul.bytecode.json
 node scripts/compile.js # get bytecode (this writes the Yul contract's bytecode to `./build/`)
 npx hardhat test tests/ERC1155Yul.js  --no-compile # test
 

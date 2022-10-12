@@ -106,4 +106,22 @@ describe("ERC1155Yul", function () {
       expect(await erc1155yul.balanceOfBatch([bob.address, alice.address, alice.address], [2, 4, 1])).to.deep.equal([2, 21, 6]);
     });
   });
+
+  it("Should allow mintBatching", async () => {
+    let tx = await erc1155yul.mintBatch(alice.address, [21], [41]);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 21)).to.equal(41);
+
+    // mint with multiple entries
+    tx = await erc1155yul.mintBatch(alice.address, [21, 2, 1], [1, 4, 2]);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 21)).to.equal(42);
+    expect(await erc1155yul.balanceOf(alice.address, 2)).to.equal(4);
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(2);
+
+    // check balanceOfBatch too
+    expect(await erc1155yul.balanceOfBatch([alice.address, alice.address, alice.address], [21, 2, 1])).to.deep.equal([42, 4, 2]);
+  });
 });
