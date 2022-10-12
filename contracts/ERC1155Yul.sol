@@ -86,7 +86,9 @@ object "ERC1155Yul" {
             */
             case 0x0e89341c /* uri(uint256 id) */ {
                 // note: the id is not used here, see this function's docstring
-                _getURI()
+                let offset, len := _getURI()
+
+                returnDynamicArray(offset, len) // a string is a dynamic array
             }
             case 0x156e29f6 /* mint(address to,uint256 id,uint256 amount) */ {
                 let to := decodeAsAddress(0)
@@ -107,28 +109,27 @@ object "ERC1155Yul" {
                 let posAccounts := decodeAsUint(0) // location in the calldata where this array begins
                 let posIds := decodeAsUint(1)
 
-                let lenAccounts := decodeAsUint(div(posAccounts, 0x20))
-                let lenIds := decodeAsUint(div(posIds, 0x20))
-                require(eq(lenAccounts, lenIds))
+                let offset, len := _createBalanceOfBatch(posAccounts, posIds) // stores in memory
 
-                let offset := _createBalanceOfBatch(posAccounts, posIds) // stores in memory
-
-                returnDynamicArray(offset, lenAccounts)
+                returnDynamicArray(offset, len)
             }
             /* @notice don't allow fallback or receive */
             default {
                 revert(0, 0)
             }
 
+            /// @dev returns a dynamic array
             function returnDynamicArray(offset, length) {
                 return(offset, mul(0x20, add(length, 2)))
             }
 
+            /// @dev returns a uint
             function returnUint(v) {
                 mstore(getMemPtr(), v)
                 return(getMemPtr(), add(getMemPtr(), 0x20))
             }
 
+            /// @dev returns empty returndata
             function returnNothing() {
                 return(0, 0)
             }
@@ -138,8 +139,10 @@ object "ERC1155Yul" {
              * CORE FUNCTIONS
              * =============================================
              */
-            function _createBalanceOfBatch(posAccounts, posIds) -> offset {
-                let lenAccounts := decodeAsUint(div(posAccounts, 0x20))
+            function _createBalanceOfBatch(posAccounts, posIds) -> offset, lenAccounts {
+                lenAccounts := decodeAsUint(div(posAccounts, 0x20))
+                let lenIds := decodeAsUint(div(posIds, 0x20))
+                require(eq(lenAccounts, lenIds))
 
                 offset := getMemPtr()
                 mstore(offset, 0x20) // 0x20 is where the length of the array is *relative to the return data*, not relative to our own internal memory
@@ -147,7 +150,7 @@ object "ERC1155Yul" {
                 
                 setMemPtr(add(offset, 0x40)) // update before loop
 
-                // then the elements
+                // then add the balance of each (account, id) requested up to `lenAccounts`
                 for { let i := 0 } lt(i, lenAccounts) { i:= add(i, 1) } {
                     let ithAccount := decodeAsAddress(_getArrayElementSlot(posAccounts, i))
                     let ithId := decodeAsUint(_getArrayElementSlot(posIds, i))
@@ -167,10 +170,12 @@ object "ERC1155Yul" {
                 calldataSlotOffset := add(startingOffset, i)
             }
 
+            /// @dev get the balance of an `account`'s token `id`
             function _getBalanceOf(account, id) -> bal {
                 bal := sload(_getBalanceSlot(account, id))
             }
 
+            /// @dev mint a new token `id` with the given `amount`
             function _mint(to, id, amount) {
                 let slot := _getBalanceSlot(to, id)
                 // retrieve existing amount
@@ -189,14 +194,14 @@ object "ERC1155Yul" {
                 slot := keccak256(getMemPtr(), 0x60)
             }
 
-            function _getURI() {
-                let uriLength := sload(uriLengthSlot())
+            function _getURI() -> offset, uriLength {
+                offset := 0x00
+                uriLength := sload(uriLengthSlot())
 
-                // a string needs an upfront 32 bytes of 0's
-                mstore(0x00, 0x20) // <store beginning of the string - pos 0x20>
+                mstore(offset, 0x20) // <store beginning of the string - pos 0x20 relative in the returndata>
 
                 // then its length
-                mstore(0x20, uriLength) // <pointer to beginning><length>
+                mstore(add(offset, 0x20), uriLength) // <pointer to beginning><length>
                 
                 // load the URI data from storage into memory
                 for { let i := 1 } lt(i, add(2, div(uriLength, 0x20))) { i := add(i, 1) }
@@ -208,11 +213,8 @@ object "ERC1155Yul" {
                     // load it from our storage trie:
                     let chunk_i := sload(slot_i)
 
-                    mstore(add(0x20, mul(i, 0x20)), chunk_i) // let's put it into memory
+                    mstore(add(offset, add(0x20, mul(i, 0x20))), chunk_i) // let's put it into memory
                 }
-
-                // return the data we stored in memory
-                return(0x00, add(0x40, mul(uriLength, 0x20)))
             }
 
             /**
@@ -221,7 +223,7 @@ object "ERC1155Yul" {
              * =============================================
              */
              /// MEMORY POINTER
-            function memPtrPos() -> p { p := 0x00 }
+            function memPtrPos() -> p { p := 0x00 } // where is the memory pointer itself stored in memory
             function getMemPtr() -> p { p := mload(memPtrPos()) }
             function setMemPtr(v) { mstore(memPtrPos(), v) }
             function incrPtr() { mstore(memPtrPos(), add(getMemPtr(), 0x20)) } // ptr++
@@ -249,7 +251,9 @@ object "ERC1155Yul" {
             }
             /// @dev helper function to require a condition
             function require(condition) {
-                if iszero(condition) { revert(0, 0) }
+                if iszero(condition) {
+                    revert(0, 0)
+                }
             }
         }
     }
