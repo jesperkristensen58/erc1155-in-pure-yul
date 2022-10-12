@@ -18,8 +18,9 @@ object "ERC1155Yul" {
          * =============================================
          */
         function ownerSlot() -> p { p := 0 }
-        // function balanceSlot() -> p { p := 1 } // not used in constructor
-        function uriLengthSlot() -> p { p := 2 }
+        // p=1: balanceSlot()
+        // p=2: operatorApprovalSlot()
+        function uriLengthSlot() -> p { p := 3 }
 
         /* =============================================
          * STORE IN STORAGE TRIE
@@ -51,19 +52,22 @@ object "ERC1155Yul" {
             // Owner (deployer)
             function ownerSlot() -> p { p := 0 }
             function balanceSlot() -> p { p := 1 }
-            // URI (store length of string in this slot)
-            function uriLengthSlot() -> p { p := 2 }
+            function operatorApprovalSlot() -> p { p := 2 }
+            function uriLengthSlot() -> p { p := 3 }  // URI (store length of string in this slot)
 
             /**
              * =============================================
              * FREE MEMORY POINTER
              * =============================================
              */
+            // ---------------
             // SCRATCH SLOT 1: 0x00->0x20
             // SCRATCH SLOT 2: 0x20->0x40
             // SCRATCH SLOT 3: 0x40->0x60
+            // ---------------
             // MEMORY POINTER: 0x60->0x80 (stored in "memPtrPos()")
-            // FIRST AVAILABLE MEMORY SLOT: 0x80, so set that below:
+            // ---------------
+            // SO FIRST AVAILABLE MEMORY SLOT: 0x80 (which is 0x20 added to its own location in memory); set that below:
             setMemPtr(add(memPtrPos(), 0x20)) // memory pointer points to 0x80 at the beginning
 
             /**
@@ -96,6 +100,8 @@ object "ERC1155Yul" {
                 returnMemoryData(from, to)
             }
             case 0x156e29f6 /* mint(address to,uint256 id,uint256 amount) */ {
+                require(calledByOwner())
+
                 let to := decodeAsAddress(0)
                 let id := decodeAsUint(1)
                 let amount := decodeAsUint(2)
@@ -104,8 +110,9 @@ object "ERC1155Yul" {
 
                 returnNothing()
             }
-            case 0xd81d0a15 /* mintBatch(address to,uint256[] ids,uint256[] amounts) */
-            {
+            case 0xd81d0a15 /* mintBatch(address to,uint256[] ids,uint256[] amounts) */ {
+                require(calledByOwner())
+                
                 let to := decodeAsAddress(0)
                 let posIds := decodeAsUint(1)
                 let posAmounts := decodeAsUint(2)
@@ -129,6 +136,8 @@ object "ERC1155Yul" {
                 returnMemoryData(from, to)
             }
             case 0xf5298aca /* burn(address from, uint256 id, uint256 amount) */ {
+                require(calledByOwner())
+
                 let from := decodeAsAddress(0)
                 let id := decodeAsUint(1)
                 let amount := decodeAsUint(2)
@@ -138,6 +147,8 @@ object "ERC1155Yul" {
                 returnNothing()
             }
             case 0x6b20c454 /* burnBatch(address from, uint256[] ids, uint256[] amounts) */ {
+                require(calledByOwner())
+
                 let from := decodeAsAddress(0)
                 let posIds := decodeAsUint(1)
                 let posAmounts := decodeAsUint(2)
@@ -145,6 +156,40 @@ object "ERC1155Yul" {
                 _burnBatch(from, posIds, posAmounts)
 
                 returnNothing()
+            }
+            case 0xa22cb465 /* setApprovalForAll(address operator, bool approved) */ {
+                let account := caller()
+                let operator := decodeAsAddress(0)
+                require(iszero(eq(account, operator))) // account != operator
+
+                let approved := decodeAsUint(1)
+
+                sstore(_getOperatorApprovalSlot(account, operator), approved)
+
+                returnNothing()
+            }
+            case 0xe985e9c5 /* isApprovedForAll(address account, address operator) */ {
+                let account := decodeAsAddress(0)
+                let operator := decodeAsAddress(1)
+                require(iszero(eq(account, operator)))
+
+                let approved := _isApprovedForAll(account, operator)
+
+                returnUint(approved) // bool behaves like uint
+            }
+            case 0x0febdd49 /* function safeTransferFrom(address from, address to, uint256 id, uint256 amount) */ {
+                let from := decodeAsAddress(0)
+                let to := decodeAsAddress(1)
+                let id := decodeAsUint(2)
+                let amount := decodeAsUint(3)
+
+                // check that msg.sender is allowed to transfer `from`'s tokens
+                // (which they are if msg.sender == from of course)
+                require(or(eq(from, caller()), _isApprovedForAll(from, caller())))
+
+                _safeTransferFrom(from, to, id, amount)
+
+                returnNothing()                
             }
             /* @notice don't allow fallback or receive */
             default {
@@ -203,6 +248,31 @@ object "ERC1155Yul" {
                 }
             }
 
+            /// @dev is the operator approved to access all of account's tokens?
+            function _isApprovedForAll(account, operator) -> approved {
+                approved := sload(_getOperatorApprovalSlot(account, operator))
+            }
+
+            function _safeTransferFrom(from, to, id, amount) {
+                let fromSlot := _getBalanceSlot(from, id)
+                let toSlot := _getBalanceSlot(to, id)
+                
+                // from = from - amount
+                let fromOld := sload(fromSlot)
+                let fromNew := safeSub(fromOld, amount)
+                sstore(fromSlot, fromNew)
+
+                // to = to + amount
+                let toOld := sload(toSlot)
+                let toNew := safeAdd(toOld, amount)
+                sstore(toSlot, toNew)
+
+
+                // TODO: EMIT EVENT!
+
+
+            }
+
              /// @dev helper to construct and collect the balance of for multiple accounts and token Ids
              /// @dev since this is a dynamic array, the function returns the starting and ending locations in memory where the array is stored
             function _createBalanceOfBatch(posAccounts, posIds) -> startsAt, endsAt {
@@ -248,29 +318,44 @@ object "ERC1155Yul" {
             /// @dev has overflow check via `safeAdd`
             function _mint(to, id, amount) {
                 let slot := _getBalanceSlot(to, id)
-                let existing := sload(slot) // minting is additive; retrieve existing amount
-                let _new := safeAdd(existing, amount)
+                let vOld := sload(slot) // minting is additive; retrieve existing amount
+                let vNew := safeAdd(vOld, amount)
 
-                sstore(slot, _new) // slot(valueSlot) = amount
+                sstore(slot, vNew) // slot(valueSlot) = amount
+
+
+
+                // TODO: EMIT EVENT!
+
             }
 
             /// @dev burns `amount` of token `id` `from` account.
             /// @dev has overflow checking via `safeSub`
             function _burn(from, id, amount) {
                 let slot := _getBalanceSlot(from, id)
-                let existing := sload(slot) // minting is additive; retrieve existing amount
-                let _new := safeSub(existing, amount)
+                let vOld := sload(slot) // minting is additive; retrieve existing amount
+                let vNew := safeSub(vOld, amount)
 
-                sstore(slot, _new) // slot(valueSlot) = amount
+                sstore(slot, vNew) // slot(valueSlot) = amount
             }
 
-            /// @dev uses the scratch space for hashing
-            function _getBalanceSlot(_address, _id) -> slot {
+            /// @dev retrieve the storage slot where the balances are stored
+            function _getBalanceSlot(_address, id) -> slot {
                 // key = <balanceSlot><to><id>
-                // valueSlot = keccak256(key)
-                mstore(0x00, balanceSlot())
+                // slot = keccak256(key)
+                mstore(0x00, balanceSlot()) // use scratch space for hashing
                 mstore(0x20, _address)
-                mstore(0x40, _id)
+                mstore(0x40, id)
+                slot := keccak256(0x00, 0x60)
+            }
+
+            /// @dev retrieve the storage slot where approval information is stored
+            function _getOperatorApprovalSlot(account, operator) -> slot {
+                // key = <operatorApprovalSlot><owner><operator>
+                // slot = keccak256(key)
+                mstore(0x00, operatorApprovalSlot())
+                mstore(0x20, account)
+                mstore(0x40, operator)
                 slot := keccak256(0x00, 0x60)
             }
 
@@ -351,6 +436,14 @@ object "ERC1155Yul" {
             function safeSub(a, b) -> r {
                 r := sub(a, b)
                 if gt(r, a) { revert(0, 0) }
+            }
+            /// @dev get the owner (the deployer)
+            function owner() -> o {
+                o := sload(ownerSlot())
+            }
+            /// @dev check that msg.sender == owner()
+            function calledByOwner() -> cbo {
+                cbo := eq(owner(), caller())
             }
         }
     }

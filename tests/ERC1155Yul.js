@@ -42,6 +42,13 @@ describe("For the ERC1155 Pure Yul Contract", function () {
       expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(4);
     });
 
+    it("Should respect owner==caller checks", async function () {
+      await expect(erc1155yul.connect(alice).mint(alice.address, 1, 4)).to.be.reverted;
+      await expect(erc1155yul.connect(alice).mint(bob.address, 1, 4)).to.be.reverted;
+      await expect(erc1155yul.connect(bob).burn(alice.address, 1, 4)).to.be.reverted;
+      await expect(erc1155yul.connect(bob).burn(bob.address, 1, 4)).to.be.reverted;
+    });
+
     it("Should allow repeated minting", async function () {
       let tx = await erc1155yul.mint(alice.address, 1, 4);
       await tx.wait();
@@ -205,6 +212,233 @@ describe("For the ERC1155 Pure Yul Contract", function () {
     expect(await erc1155yul.balanceOf(bob.address, 5)).to.equal(50);
     expect(await erc1155yul.balanceOf(bob.address, 6)).to.equal(60);
     expect(await erc1155yul.balanceOf(bob.address, 7)).to.equal(61);
+  });
+
+  it("Should set Approval for all correctly", async () => {
+
+    expect(await erc1155yul.isApprovedForAll(owner.address, alice.address)).to.equal(false);
+    expect(await erc1155yul.isApprovedForAll(owner.address, bob.address)).to.equal(false);
+
+    let tx = await erc1155yul.setApprovalForAll(alice.address, true);
+    await tx.wait();
+
+    expect(await erc1155yul.isApprovedForAll(owner.address, alice.address)).to.equal(true);
+    expect(await erc1155yul.isApprovedForAll(owner.address, bob.address)).to.equal(false);
+
+    tx = await erc1155yul.setApprovalForAll(bob.address, true);
+    await tx.wait();
+
+    expect(await erc1155yul.isApprovedForAll(owner.address, alice.address)).to.equal(true);
+    expect(await erc1155yul.isApprovedForAll(owner.address, bob.address)).to.equal(true);
+
+    // anyone can check the approval flag
+    expect(await erc1155yul.connect(alice).isApprovedForAll(owner.address, alice.address)).to.equal(true);
+    expect(await erc1155yul.connect(alice).isApprovedForAll(owner.address, bob.address)).to.equal(true);
+
+    expect(await erc1155yul.connect(bob).isApprovedForAll(owner.address, alice.address)).to.equal(true);
+    expect(await erc1155yul.connect(bob).isApprovedForAll(owner.address, bob.address)).to.equal(true);
+  });
+
+  it("Should revert on approver == operator", async () => {
+    await expect(erc1155yul.connect(alice).setApprovalForAll(alice.address, true)).to.be.reverted;
+    await expect(erc1155yul.connect(bob).setApprovalForAll(bob.address, true)).to.be.reverted;
+  });
+
+  it("Should allow anyone to set their own approval", async () => {
+    expect(await erc1155yul.isApprovedForAll(owner.address, bob.address)).to.equal(false);
+    expect(await erc1155yul.isApprovedForAll(alice.address, bob.address)).to.equal(false);
+
+    let tx = await erc1155yul.connect(alice).setApprovalForAll(bob.address, true);
+    await tx.wait();
+
+    expect(await erc1155yul.isApprovedForAll(owner.address, bob.address)).to.equal(false);
+    expect(await erc1155yul.isApprovedForAll(alice.address, bob.address)).to.equal(true);
+  });
+
+  it("Should transfer tokens between accounts", async () => {
+    
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+
+    tx = await erc1155yul.mint(alice.address, 1, 2);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(2);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+
+    // alice approves the contract owner to move her tokens
+    tx = await erc1155yul.connect(alice).setApprovalForAll(owner.address, true);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(2);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+
+    expect(await erc1155yul.isApprovedForAll(alice.address, owner.address)).to.equal(true); // owner can operate on alice's tokens
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(2);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+
+    tx = await erc1155yul.connect(owner).safeTransferFrom(alice.address, bob.address, 1, 2);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(2);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+  });
+
+  it("Should have the right safeguard in place for transferring", async () => {
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+
+    // alice gets 2 token 1's
+    tx = await erc1155yul.mint(alice.address, 1, 2);
+    await tx.wait();
+
+    // bob gers 20 token 8's
+    tx = await erc1155yul.mint(bob.address, 8, 20);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(2);
+    expect(await erc1155yul.balanceOf(bob.address, 8)).to.equal(20);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+
+    // make approvals
+    tx = await erc1155yul.connect(alice).setApprovalForAll(owner.address, true);
+    await tx.wait();
+    tx = await erc1155yul.connect(bob).setApprovalForAll(owner.address, true);
+    await tx.wait();
+    expect(await erc1155yul.isApprovedForAll(alice.address, owner.address)).to.equal(true); // owner can operate on alice's tokens
+    expect(await erc1155yul.isApprovedForAll(bob.address, owner.address)).to.equal(true); // owner can operate on bob's tokens
+
+    expect(await erc1155yul.isApprovedForAll(alice.address, bob.address)).to.equal(false); // owner can operate on bob's tokens
+    expect(await erc1155yul.isApprovedForAll(bob.address, alice.address)).to.equal(false); // owner can operate on bob's tokens
+
+    // transfer 1 token from alice to bob
+    tx = await erc1155yul.connect(owner).safeTransferFrom(alice.address, bob.address, 1, 1);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(bob.address, 8)).to.equal(20);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+
+    // transfer 2 token 8's from bob to alice
+    tx = await erc1155yul.connect(owner).safeTransferFrom(bob.address, alice.address, 8, 2);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(alice.address, 8)).to.equal(2);
+    //
+    expect(await erc1155yul.balanceOf(bob.address, 8)).to.equal(18);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+    //
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(owner.address, 8)).to.equal(0);
+
+    // now try without approval
+    await expect(erc1155yul.connect(alice).safeTransferFrom(bob.address, owner.address, 8, 2)).to.be.reverted;
+    await expect(erc1155yul.connect(alice).safeTransferFrom(owner.address, bob.address, 8, 2)).to.be.reverted;
+    await expect(erc1155yul.connect(bob).safeTransferFrom(alice.address, owner.address, 8, 2)).to.be.reverted;
+    await expect(erc1155yul.connect(bob).safeTransferFrom(owner.address, alice.address, 8, 2)).to.be.reverted;
+
+    // change approval
+    tx = await erc1155yul.connect(alice).setApprovalForAll(owner.address, false); // owner cannot access alice's funds anymore
+    await tx.wait();
+    expect(await erc1155yul.isApprovedForAll(alice.address, owner.address)).to.equal(false); // owner can operate on alice's tokens
+    expect(await erc1155yul.isApprovedForAll(bob.address, owner.address)).to.equal(true); // owner can operate on bob's tokens
+
+    // now try as owner to transfer from Alice's funds
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+
+    await expect(erc1155yul.safeTransferFrom(alice.address, bob.address, 1, 1)).to.be.reverted;
+
+    // nothing happened
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+  });
+
+  it("Should allow the owner of tokens to safeTransferFrom to wherever", async () => {
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+
+    expect(await erc1155yul.isApprovedForAll(alice.address, owner.address)).to.equal(false); // owner can operate on alice's tokens
+    expect(await erc1155yul.isApprovedForAll(alice.address, bob.address)).to.equal(false); // owner can operate on alice's tokens
+    //
+    expect(await erc1155yul.isApprovedForAll(bob.address, owner.address)).to.equal(false); // owner can operate on alice's tokens
+    expect(await erc1155yul.isApprovedForAll(bob.address, alice.address)).to.equal(false); // owner can operate on alice's tokens
+    //
+    expect(await erc1155yul.isApprovedForAll(owner.address, alice.address)).to.equal(false); // owner can operate on alice's tokens
+    expect(await erc1155yul.isApprovedForAll(owner.address, bob.address)).to.equal(false); // owner can operate on alice's tokens
+
+    tx = await erc1155yul.mint(alice.address, 1, 1);
+    await tx.wait();
+    tx = await erc1155yul.mint(bob.address, 1, 1);
+    await tx.wait();
+    tx = await erc1155yul.mint(owner.address, 1, 1);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(1);
+
+    // don't set approval for anyone ...
+    // who can transfer now?
+    await expect(erc1155yul.connect(owner).safeTransferFrom(alice.address, bob.address, 1, 1)).to.be.reverted;
+    await expect(erc1155yul.connect(owner).safeTransferFrom(bob.address, alice.address, 1, 1)).to.be.reverted;
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(1);
+
+    await expect(erc1155yul.connect(alice).safeTransferFrom(owner.address, bob.address, 1, 1)).to.be.reverted;
+    await expect(erc1155yul.connect(alice).safeTransferFrom(bob.address, owner.address, 1, 1)).to.be.reverted;
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(1);
+
+    await expect(erc1155yul.connect(bob).safeTransferFrom(alice.address, owner.address, 1, 1)).to.be.reverted;
+    await expect(erc1155yul.connect(bob).safeTransferFrom(owner.address, alice.address, 1, 1)).to.be.reverted;
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(1);
+
+    // now try sending from ourselves, that should work
+    expect(await erc1155yul.isApprovedForAll(alice.address, bob.address)).to.equal(false); // bob cannot operate on alice's tokens to be sure
+    expect(await erc1155yul.isApprovedForAll(bob.address, alice.address)).to.equal(false); // alice cannot operate on bob's tokens
+
+    tx = await erc1155yul.connect(alice).safeTransferFrom(alice.address, bob.address, 1, 1); // connect as alice and send her token to bob
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(2);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(1);
+
+    await expect(erc1155yul.connect(alice).safeTransferFrom(bob.address, alice.address, 1, 1)); // try to reclaim them ... can't be done
+
+    tx = await erc1155yul.connect(bob).safeTransferFrom(bob.address, owner.address, 1, 1);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(2);
+
+    tx = await erc1155yul.safeTransferFrom(owner.address, alice.address, 1, 1);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(1);
   });
 
   }); // end of deployed code tests
