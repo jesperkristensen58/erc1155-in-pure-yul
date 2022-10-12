@@ -110,7 +110,7 @@ object "ERC1155Yul" {
                 let posIds := decodeAsUint(1)
                 let posAmounts := decodeAsUint(2)
 
-                _doMintBatch(to, posIds, posAmounts)
+                _doMintBatch(to, posIds, posAmounts) /// @dev calls _mint repeatedly
 
                 returnNothing()
             }
@@ -128,6 +128,15 @@ object "ERC1155Yul" {
 
                 returnMemoryData(from, to)
             }
+            case 0xf5298aca /* burn(address from, uint256 id, uint256 amount) */ {
+                let from := decodeAsAddress(0)
+                let id := decodeAsUint(1)
+                let amount := decodeAsUint(2)
+
+                _burn(from, id, amount)
+
+                returnNothing()
+            }
             /* @notice don't allow fallback or receive */
             default {
                 revert(0, 0)
@@ -144,7 +153,7 @@ object "ERC1155Yul" {
             function returnUint(v) {
                 let ptr := getMemPtr()
                 mstore(ptr, v)
-                returnMemoryData(ptr, add(ptr, 0x20))
+                returnMemoryData(ptr, safeAdd(ptr, 0x20))
             }
 
             /// @dev returns empty returndata
@@ -180,9 +189,9 @@ object "ERC1155Yul" {
 
                 startsAt := getMemPtr()
                 mstore(startsAt, 0x20) // 0x20 is where the length of the array is *relative to the return data*, not relative to our own internal memory
-                mstore(add(startsAt, 0x20), lenAccounts)  // first store the length of the array
+                mstore(safeAdd(startsAt, 0x20), lenAccounts)  // first store the length of the array
                 
-                setMemPtr(add(startsAt, 0x40)) // update before loop
+                setMemPtr(safeAdd(startsAt, 0x40)) // update before loop
 
                 // then add the balance of each (account, id) requested up to `lenAccounts`
                 for { let i := 0 } lt(i, lenAccounts) { i:= add(i, 1) }
@@ -203,8 +212,8 @@ object "ERC1155Yul" {
             function _getArrayElementSlot(posArr, i) -> calldataSlotOffset {
                 // We're asking: how many 32-byte chunks into the calldata does this array's ith element lie
                 // the array itself starts at posArra (starts meaning: that is where the pointer to the length of the array is stored)
-                let startingOffset := div(add(posArr, 0x20), 0x20)
-                calldataSlotOffset := add(startingOffset, i)
+                let startingOffset := div(safeAdd(posArr, 0x20), 0x20)
+                calldataSlotOffset := safeAdd(startingOffset, i)
             }
 
             /// @dev get the balance of an `account`'s token `id`
@@ -212,11 +221,22 @@ object "ERC1155Yul" {
                 bal := sload(_getBalanceSlot(account, id))
             }
 
-            /// @dev mint a new token `id` with the given `amount`
+            /// @dev mints token `id` `to` account of given `amount`
+            /// @dev has overflow check via `safeAdd`
             function _mint(to, id, amount) {
                 let slot := _getBalanceSlot(to, id)
                 let existing := sload(slot) // minting is additive; retrieve existing amount
-                let _new := add(amount, existing)
+                let _new := safeAdd(existing, amount)
+
+                sstore(slot, _new) // slot(valueSlot) = amount
+            }
+
+            /// @dev burns `amount` of token `id` `from` account.
+            /// @dev has overflow checking via `safeSub`
+            function _burn(from, id, amount) {
+                let slot := _getBalanceSlot(from, id)
+                let existing := sload(slot) // minting is additive; retrieve existing amount
+                let _new := safeSub(existing, amount)
 
                 sstore(slot, _new) // slot(valueSlot) = amount
             }
@@ -241,13 +261,13 @@ object "ERC1155Yul" {
                 mstore(startsAt, 0x20) // <store beginning of the string - pos 0x20 relative in the returndata>
 
                 // then its length
-                mstore(add(startsAt, 0x20), uriLength) // <pointer to beginning><length>
-                setMemPtr(add(startsAt, 0x40))
+                mstore(safeAdd(startsAt, 0x20), uriLength) // <pointer to beginning><length>
+                setMemPtr(safeAdd(startsAt, 0x40))
                 
                 // load the URI data from storage into memory
                 for { let i := 0 } lt(i, uriLength) { i := add(i, 1) }
                 {
-                    let slot_i := add(uriLengthSlot(), add(i, 1))
+                    let slot_i := safeAdd(uriLengthSlot(), add(i, 1))
 
                     // <pointer to beginning><length><first chunk of data><second chunk of data>...
                     //                                        ^ we are here in the first iteration
@@ -270,7 +290,7 @@ object "ERC1155Yul" {
             function memPtrPos() -> p { p := 0x60 } // where is the memory pointer itself stored in memory
             function getMemPtr() -> p { p := mload(memPtrPos()) }
             function setMemPtr(v) { mstore(memPtrPos(), v) }
-            function incrPtr() { mstore(memPtrPos(), add(getMemPtr(), 0x20)) } // ptr++
+            function incrPtr() { mstore(memPtrPos(), safeAdd(getMemPtr(), 0x20)) } // ptr++
 
             /// CALLDATA
             function getSelector() -> selector {
@@ -298,6 +318,16 @@ object "ERC1155Yul" {
                 if iszero(condition) {
                     revert(0, 0)
                 }
+            }
+            /// @dev a+b with overflow checking
+            function safeAdd(a, b) -> r {
+                r := add(a, b)
+                if or(lt(r, a), lt(r, b)) { revert(0, 0) }
+            }
+            /// @dev a-b with overflow checking
+            function safeSub(a, b) -> r {
+                r := sub(a, b)
+                if gt(r, a) { revert(0, 0) }
             }
         }
     }

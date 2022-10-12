@@ -124,4 +124,49 @@ describe("ERC1155Yul", function () {
     // check balanceOfBatch too
     expect(await erc1155yul.balanceOfBatch([alice.address, alice.address, alice.address], [21, 2, 1])).to.deep.equal([42, 4, 2]);
   });
+
+  it("Should allow for burning tokens", async () => {
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+    
+    tx = await erc1155yul.mint(bob.address, 1, 2);
+    await tx.wait();
+    // check that balance was correctly set
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(2);
+    
+    // now burn
+    tx = await erc1155yul.burn(bob.address, 1, 2);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+
+    // burn not to zero
+    tx = await erc1155yul.mint(bob.address, 1, 2);
+    await tx.wait();
+    // check that balance was correctly set
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(2);
+    
+    // now burn
+    tx = await erc1155yul.burn(bob.address, 1, 1);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+
+    // burn more than we have
+    tx = await erc1155yul.mint(bob.address, 1, 2);
+    await tx.wait();
+    // check that balance was correctly set
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(3);
+    
+    await expect(erc1155yul.burn(bob.address, 1, 4)).to.be.reverted;
+
+    // make sure nothing changed
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(3);
+  });
 });
