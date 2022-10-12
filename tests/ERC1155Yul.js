@@ -6,7 +6,7 @@ const { expect } = require("chai");
 
 console.log("🧪 testing...");
 
-describe("ERC1155Yul", function () {
+describe("For the ERC1155 Pure Yul Contract", function () {
   let erc1155yul;
   let owner;
   let other;
@@ -25,15 +25,15 @@ describe("ERC1155Yul", function () {
     await erc1155yul.deployed();
   })
 
-  describe("Deployment", function () {
-    it("Should set the right hardcoded URI on deployment", async function () {
+  describe("The deployment", function () {
+    it("Should set the right hardcoded URI during construction", async function () {
       expect(await erc1155yul.uri(0)).to.equal("https://token-cdn-domain/{id}.json");
       // any other account can access too
       expect(await erc1155yul.connect(alice).uri(0)).to.equal("https://token-cdn-domain/{id}.json");
     });
   });
 
-  describe("Runtime", function () {
+  describe("The deployed code", function () {
     it("Should allow minting and getting balanceOf", async function () {
       let tx = await erc1155yul.mint(alice.address, 1, 4);
       await tx.wait();
@@ -105,7 +105,6 @@ describe("ERC1155Yul", function () {
       // order shouldn't matter
       expect(await erc1155yul.balanceOfBatch([bob.address, alice.address, alice.address], [2, 4, 1])).to.deep.equal([2, 21, 6]);
     });
-  });
 
   it("Should allow mintBatching", async () => {
     let tx = await erc1155yul.mintBatch(alice.address, [21], [41]);
@@ -169,4 +168,44 @@ describe("ERC1155Yul", function () {
     expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
     expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(3);
   });
+
+  it("Should allow for burn batching", async () => {
+    // simple single-account
+    let tx = await erc1155yul.mintBatch(alice.address, [21], [41]);
+    await tx.wait();
+    expect(await erc1155yul.balanceOf(alice.address, 21)).to.equal(41);
+    tx = await erc1155yul.burnBatch(alice.address, [21], [4]);
+    await tx.wait();
+    expect(await erc1155yul.balanceOf(alice.address, 21)).to.equal(37);
+
+    // bigger example, more accounts
+    tx = await erc1155yul.mintBatch(alice.address, [1, 2, 3], [10, 20, 30]);
+    await tx.wait();
+
+    tx = await erc1155yul.mintBatch(bob.address, [5, 6, 7], [51, 62, 73]);
+    await tx.wait();
+    
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(10);
+    expect(await erc1155yul.balanceOf(alice.address, 2)).to.equal(20);
+    expect(await erc1155yul.balanceOf(alice.address, 3)).to.equal(30);
+
+    expect(await erc1155yul.balanceOf(bob.address, 5)).to.equal(51);
+    expect(await erc1155yul.balanceOf(bob.address, 6)).to.equal(62);
+    expect(await erc1155yul.balanceOf(bob.address, 7)).to.equal(73);
+
+    tx = await erc1155yul.burnBatch(alice.address, [21, 1, 2, 3], [1, 1, 1, 1]);
+    await tx.wait();
+    expect(await erc1155yul.balanceOf(alice.address, 21)).to.equal(36);
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(9);
+    expect(await erc1155yul.balanceOf(alice.address, 2)).to.equal(19);
+    expect(await erc1155yul.balanceOf(alice.address, 3)).to.equal(29);
+
+    tx = await erc1155yul.burnBatch(bob.address, [5, 6, 7], [1, 2, 12]);
+    await tx.wait();
+    expect(await erc1155yul.balanceOf(bob.address, 5)).to.equal(50);
+    expect(await erc1155yul.balanceOf(bob.address, 6)).to.equal(60);
+    expect(await erc1155yul.balanceOf(bob.address, 7)).to.equal(61);
+  });
+
+  }); // end of deployed code tests
 });

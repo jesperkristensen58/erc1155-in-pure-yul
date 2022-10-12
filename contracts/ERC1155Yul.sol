@@ -110,7 +110,7 @@ object "ERC1155Yul" {
                 let posIds := decodeAsUint(1)
                 let posAmounts := decodeAsUint(2)
 
-                _doMintBatch(to, posIds, posAmounts) /// @dev calls _mint repeatedly
+                _mintBatch(to, posIds, posAmounts) /// @dev calls _mint repeatedly
 
                 returnNothing()
             }
@@ -134,6 +134,15 @@ object "ERC1155Yul" {
                 let amount := decodeAsUint(2)
 
                 _burn(from, id, amount)
+
+                returnNothing()
+            }
+            case 0x6b20c454 /* burnBatch(address from, uint256[] ids, uint256[] amounts) */ {
+                let from := decodeAsAddress(0)
+                let posIds := decodeAsUint(1)
+                let posAmounts := decodeAsUint(2)
+
+                _burnBatch(from, posIds, posAmounts)
 
                 returnNothing()
             }
@@ -167,7 +176,7 @@ object "ERC1155Yul" {
              * =============================================
              */
              /// @dev do the mint batching against the incoming Ids and amounts
-            function _doMintBatch(to, posIds, posAmounts) {
+            function _mintBatch(to, posIds, posAmounts) {
                 let lenIds := decodeAsUint(div(posIds, 0x20))
                 let lenAmounts := decodeAsUint(div(posAmounts, 0x20))
                 require(eq(lenIds, lenAmounts))
@@ -177,6 +186,20 @@ object "ERC1155Yul" {
                     let ithId := decodeAsUint(_getArrayElementSlot(posIds, i))
                     let ithAmount := decodeAsUint(_getArrayElementSlot(posAmounts, i))
                     _mint(to, ithId, ithAmount)
+                }
+            }
+
+            /// @dev do the burn batching against the incoming Ids and amounts
+            function _burnBatch(from, posIds, posAmounts) {
+                let lenIds := decodeAsUint(div(posIds, 0x20))
+                let lenAmounts := decodeAsUint(div(posAmounts, 0x20))
+                require(eq(lenIds, lenAmounts))
+
+                for { let i := 0 } lt(i, lenIds) { i:= add(i, 1) }
+                {
+                    let ithId := decodeAsUint(_getArrayElementSlot(posIds, i))
+                    let ithAmount := decodeAsUint(_getArrayElementSlot(posAmounts, i))
+                    _burn(from, ithId, ithAmount)
                 }
             }
 
