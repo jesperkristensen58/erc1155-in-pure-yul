@@ -244,11 +244,6 @@
 				"internalType": "uint256[]",
 				"name": "amounts",
 				"type": "uint256[]"
-			},
-			{
-				"internalType": "bytes",
-				"name": "data",
-				"type": "bytes"
 			}
 		],
 		"name": "safeBatchTransferFrom",

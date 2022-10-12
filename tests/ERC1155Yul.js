@@ -441,5 +441,70 @@ describe("For the ERC1155 Pure Yul Contract", function () {
     expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(1);
   });
 
+  it("Should safeBatchTransferFrom correctly", async () => {
+
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(owner.address, 2)).to.equal(0);
+    //
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(alice.address, 2)).to.equal(0);
+    //
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 2)).to.equal(0);
+
+    tx = await erc1155yul.mint(owner.address, 1, 4);
+    tx = await erc1155yul.mint(owner.address, 2, 8);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(4);
+    expect(await erc1155yul.balanceOf(owner.address, 2)).to.equal(8);
+    //
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(alice.address, 2)).to.equal(0);
+    //
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(bob.address, 2)).to.equal(0);
+
+    tx = await erc1155yul.safeBatchTransferFrom(owner.address, bob.address, [1, 2], [1, 1]);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(3);
+    expect(await erc1155yul.balanceOf(owner.address, 2)).to.equal(7);
+    //
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(0);
+    expect(await erc1155yul.balanceOf(alice.address, 2)).to.equal(0);
+    //
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(bob.address, 2)).to.equal(1);
+
+    // cant move what we dont have
+    await expect(erc1155yul.safeBatchTransferFrom(alice.address, bob.address, [1, 2], [1, 1])).to.be.reverted;
+    
+    tx = await erc1155yul.safeBatchTransferFrom(owner.address, alice.address, [1, 2], [2, 2]);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(owner.address, 2)).to.equal(5);
+    //
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(2);
+    expect(await erc1155yul.balanceOf(alice.address, 2)).to.equal(2);
+    //
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(bob.address, 2)).to.equal(1);
+
+    // can move one at a time
+    tx = await erc1155yul.safeBatchTransferFrom(owner.address, alice.address, [2], [1]);
+    await tx.wait();
+
+    expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(owner.address, 2)).to.equal(4);
+    //
+    expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(2);
+    expect(await erc1155yul.balanceOf(alice.address, 2)).to.equal(3);
+    //
+    expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(1);
+    expect(await erc1155yul.balanceOf(bob.address, 2)).to.equal(1);
+  });
+
   }); // end of deployed code tests
 });

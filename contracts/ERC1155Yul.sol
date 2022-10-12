@@ -179,17 +179,39 @@ object "ERC1155Yul" {
             }
             case 0x0febdd49 /* function safeTransferFrom(address from, address to, uint256 id, uint256 amount) */ {
                 let from := decodeAsAddress(0)
-                let to := decodeAsAddress(1)
-                let id := decodeAsUint(2)
-                let amount := decodeAsUint(3)
-
                 // check that msg.sender is allowed to transfer `from`'s tokens
                 // (which they are if msg.sender == from of course)
                 require(or(eq(from, caller()), _isApprovedForAll(from, caller())))
 
+                let to := decodeAsAddress(1)
+                let id := decodeAsUint(2)
+                let amount := decodeAsUint(3)
+
                 _safeTransferFrom(from, to, id, amount)
 
                 returnNothing()                
+            }
+            case 0xfba0ee64 /* function safeBatchTransferFrom(address from, address to, uint256[] memory ids, uint256[] memory amounts) */ {
+                let from := decodeAsAddress(0)
+                // are we allowed to transfer
+                require(or(eq(from, caller()), _isApprovedForAll(from, caller())))
+
+                let to := decodeAsAddress(1)
+                let posIds := decodeAsUint(2)
+                let posAmounts := decodeAsUint(3)
+
+                let lenIds := decodeAsUint(div(posIds, 0x20))
+
+                // then add the balance of each (account, id) requested up to `lenAccounts`
+                for { let i := 0 } lt(i, lenIds) { i:= add(i, 1) }
+                {
+                    let ithId := decodeAsUint(_getArrayElementSlot(posIds, i))
+                    let ithAmount := decodeAsAddress(_getArrayElementSlot(posAmounts, i))
+                    
+                    _safeTransferFrom(from, to, ithId, ithAmount)
+                }
+                
+                returnNothing()
             }
             /* @notice don't allow fallback or receive */
             default {
