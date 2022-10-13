@@ -9,7 +9,7 @@ Some mock contracts (under `contracts/mocks`) accompy the main Yul contract for 
 
 # How to Compile & Test
 
-Run
+Run:
 
 ```shell
 ./test.sh
