@@ -78,6 +78,20 @@ describe("For the ERC1155 Pure Yul Contract", function () {
       await expect(erc1155yul.connect(bob).burn(bob.address, 1, 4)).to.be.reverted;
     });
 
+    it("Should error when handling the zero address", async () => {
+      await expect(erc1155yul.mint(ethers.constants.AddressZero, 1, 4)).to.be.reverted;
+
+      // should also revert if transferring to zero address
+      let tx = await erc1155yul.mint(alice.address, 1, 4);
+      await tx.wait();
+
+      // this is fine
+      tx = await erc1155yul.connect(alice).safeTransferFrom(alice.address, bob.address, 1, 2);
+      await tx.wait();
+      // but sending to zero address is no good
+      await expect(erc1155yul.connect(alice).safeTransferFrom(alice.address, ethers.constants.AddressZero, 1, 2)).to.be.reverted;
+    });
+
     it("Should allow repeated minting", async function () {
       let tx = await erc1155yul.mint(alice.address, 1, 4);
       await tx.wait();
@@ -650,7 +664,7 @@ describe("For the ERC1155 Pure Yul Contract", function () {
       expect(await erc1155yul.balanceOf(noreceiver.address, 1)).to.equal(0);
     });
 
-    it.only("Should enforce the receiver interface for mintBatch", async () => {
+    it("Should enforce the receiver interface for mintBatch", async () => {
       expect(await erc1155yul.balanceOf(alice.address, 0)).to.equal(0);
       expect(await erc1155yul.balanceOf(bob.address, 0)).to.equal(0);
       expect(await erc1155yul.balanceOf(owner.address, 0)).to.equal(0);
@@ -675,6 +689,24 @@ describe("For the ERC1155 Pure Yul Contract", function () {
       expect(await erc1155yul.balanceOf(receiver.address, 1)).to.equal(0);
       expect(await erc1155yul.balanceOf(noreceiver.address, 1)).to.equal(0);
     });
+
+    it("Should emit an event on mint", async () => {
+      await expect(erc1155yul.mint(alice.address, 1, 4)).to.emit(erc1155yul, "TransferSingle")
+      .withArgs(owner.address, ethers.constants.AddressZero, alice.address, 1, 4);
+    });
+
+    it("Should emit an event on mintBatch", async () => {
+
+      expect(await erc1155yul.balanceOfBatch([alice.address, alice.address], [1, 2])).to.deep.equal([0, 0]);
+
+      await expect(erc1155yul.mintBatch(alice.address, [1, 2], [4, 2])).to.emit(erc1155yul, "TransferBatch")
+      .withArgs(owner.address, ethers.constants.AddressZero, alice.address, [1, 2], [4, 2]);
+
+      expect(await erc1155yul.balanceOfBatch([alice.address, alice.address], [1, 2])).to.deep.equal([4, 2]);
+
+      await expect(erc1155yul.mintBatch(bob.address, [1, 4, 10], [1, 2, 8])).to.emit(erc1155yul, "TransferBatch")
+      .withArgs(owner.address, ethers.constants.AddressZero, bob.address, [1, 4, 10], [1, 2, 8]);
+    })
 
   }); // end of deployed code tests
 }); // end of all tests
