@@ -5,16 +5,16 @@
 # The ERC1155 - Delivered as a Yul Present!
 
 This is a pure Yul implementation of the ERC1155 Token contract.
+Some mock contracts (under `contracts/mocks`) accompy the main Yul contract for testing purposes.
 
 # How to Test
 
 ```shell
-node scripts/compile.js # compiles the Yul contract
+node scripts/compile.js # compiles the Yul contract as well as the mock contracts
 npx hardhat test tests/ERC1155Yul.js --no-compile
 ```
 
-Notice the `--no-compile` flag; this is to ensure that hardhat does not start compiling the Yul contract (it won't know how by default at least).
-So we compile separately with the `compile.js` script.
+Notice the `--no-compile` flag; this is to ensure that hardhat does not start compiling the Yul contract (it won't know how by default at least). So we compile separately with the `compile.js` script. We then do the same for the Solidity contracts as well using `solc(...)`.
 
 # Author
 Jesper Kristensen
