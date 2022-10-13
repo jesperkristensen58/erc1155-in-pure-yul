@@ -13,4 +13,8 @@ contract Receiver {
     function onERC1155Received(address operator, address from, uint256 id, uint256 amount) external view returns (bytes4) {
         return this.onERC1155Received.selector;
     }
+
+    function onERC1155BatchReceived(address operator, address from, address to, uint256[] memory ids, uint256[] memory amounts) external view returns (bytes4) {
+        return this.onERC1155BatchReceived.selector;
+    }
 }

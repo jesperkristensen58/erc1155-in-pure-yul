@@ -562,7 +562,7 @@ describe("For the ERC1155 Pure Yul Contract", function () {
       expect(await erc1155yul.balanceOf(receiver.address, 1)).to.equal(1);
     });
 
-    it("Should enforce the receiver interface also for safeTransferFrom", async () => {
+    it("Should enforce the receiver interface for safeTransferFrom", async () => {
       expect(await erc1155yul.balanceOf(alice.address, 0)).to.equal(0);
       expect(await erc1155yul.balanceOf(bob.address, 0)).to.equal(0);
       expect(await erc1155yul.balanceOf(owner.address, 0)).to.equal(0);
@@ -605,6 +605,75 @@ describe("For the ERC1155 Pure Yul Contract", function () {
 
       expect(await erc1155yul.balanceOf(receiver.address, 0)).to.equal(2);
       expect(await erc1155yul.balanceOf(receiver.address, 1)).to.equal(1);
+    });
+
+    it("Should enforce the receiver interface for safeBatchTransferFrom", async () => {
+      expect(await erc1155yul.balanceOf(alice.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(bob.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(owner.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(receiver.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(noreceiver.address, 0)).to.equal(0);
+
+      tx = await erc1155yul.mint(alice.address, 0, 4);
+      await tx.wait();
+      tx = await erc1155yul.mint(alice.address, 1, 2);
+      await tx.wait();
+
+      expect(await erc1155yul.balanceOf(alice.address, 0)).to.equal(4);
+      expect(await erc1155yul.balanceOf(bob.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(owner.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(receiver.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(noreceiver.address, 0)).to.equal(0);
+
+      await expect(erc1155yul.connect(alice).safeBatchTransferFrom(alice.address, noreceiver.address, [0, 1], [1, 1])).to.be.reverted;
+      
+      // nothing should change
+      expect(await erc1155yul.balanceOf(alice.address, 0)).to.equal(4);
+      expect(await erc1155yul.balanceOf(bob.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(owner.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(receiver.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(noreceiver.address, 0)).to.equal(0);
+
+      tx = await erc1155yul.connect(alice).safeBatchTransferFrom(alice.address, receiver.address, [0, 1], [1, 1]);
+      await tx.wait();
+
+      expect(await erc1155yul.balanceOf(alice.address, 0)).to.equal(3);
+      expect(await erc1155yul.balanceOf(bob.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(owner.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(receiver.address, 0)).to.equal(1);
+      expect(await erc1155yul.balanceOf(noreceiver.address, 0)).to.equal(0);
+
+      expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(1);
+      expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(0);
+      expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+      expect(await erc1155yul.balanceOf(receiver.address, 1)).to.equal(1);
+      expect(await erc1155yul.balanceOf(noreceiver.address, 1)).to.equal(0);
+    });
+
+    it.only("Should enforce the receiver interface for mintBatch", async () => {
+      expect(await erc1155yul.balanceOf(alice.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(bob.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(owner.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(receiver.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(noreceiver.address, 0)).to.equal(0);
+
+      tx = await erc1155yul.mintBatch(alice.address, [0, 1], [4, 2]);
+      await tx.wait();
+      tx = await erc1155yul.mintBatch(bob.address, [1, 2], [2, 2]);
+      await tx.wait();
+
+      expect(await erc1155yul.balanceOf(alice.address, 0)).to.equal(4);
+      expect(await erc1155yul.balanceOf(bob.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(owner.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(receiver.address, 0)).to.equal(0);
+      expect(await erc1155yul.balanceOf(noreceiver.address, 0)).to.equal(0);
+
+      expect(await erc1155yul.balanceOf(alice.address, 1)).to.equal(2);
+      expect(await erc1155yul.balanceOf(bob.address, 1)).to.equal(2);
+      expect(await erc1155yul.balanceOf(bob.address, 2)).to.equal(2);
+      expect(await erc1155yul.balanceOf(owner.address, 1)).to.equal(0);
+      expect(await erc1155yul.balanceOf(receiver.address, 1)).to.equal(0);
+      expect(await erc1155yul.balanceOf(noreceiver.address, 1)).to.equal(0);
     });
 
   }); // end of deployed code tests

@@ -6,6 +6,14 @@
  * @author Jesper Kristensen
  * @date October, 2022
  */
+
+
+//// FINISH THIS -- ONLY 2 THINGS REMAIN :---)
+//// TODO: DO THE "CHECK INTERFACE" FOR BATCH TRANSFERS (JUST A SLIGHTLY DIFF INTERFACE SELECTOR - SAME LOGIC)
+//// TODO: DO THE EVENTS!!!
+
+
+
 object "ERC1155Yul" {
     /**
      * @notice Constructor
@@ -98,7 +106,7 @@ object "ERC1155Yul" {
 
                 returnMemoryData(from, to)
             }
-            case 0x156e29f6 /* mint(address to,uint256 id,uint256 amount) */ {
+            case 0x156e29f6 /* mint(address to, uint256 id, uint256 amount) */ {
                 require(calledByOwner())
 
                 let to := decodeAsAddress(0)
@@ -112,7 +120,7 @@ object "ERC1155Yul" {
 
                 returnNothing()
             }
-            case 0xd81d0a15 /* mintBatch(address to,uint256[] ids,uint256[] amounts) */ {
+            case 0xd81d0a15 /* mintBatch(address to, uint256[] ids, uint256[] amounts) */ {
                 require(calledByOwner())
                 
                 let to := decodeAsAddress(0)
@@ -120,6 +128,8 @@ object "ERC1155Yul" {
                 let posAmounts := decodeAsUint(2)
 
                 _mintBatch(to, posIds, posAmounts) /// @dev calls _mint repeatedly
+
+                _doSafeBatchTransferAcceptanceCheck(to)
 
                 returnNothing()
             }
@@ -216,6 +226,8 @@ object "ERC1155Yul" {
                     _safeTransferFrom(from, to, ithId, ithAmount)
                 }
 
+                _doSafeBatchTransferAcceptanceCheck(to)
+
                 returnNothing()
             }
             /* @notice don't allow fallback or receive */
@@ -258,7 +270,7 @@ object "ERC1155Yul" {
                     let ithId := decodeAsUint(_getArrayElementSlot(posIds, i))
                     let ithAmount := decodeAsUint(_getArrayElementSlot(posAmounts, i))
                     _mint(to, ithId, ithAmount)
-                }
+                }                
             }
 
             /// @dev do the burn batching against the incoming Ids and amounts
@@ -303,13 +315,28 @@ object "ERC1155Yul" {
             /// @dev check that the receiving party--potentially a contract--allows receipt of ERC1155s
             /// @param to the receiver of the erc1155 being sent
             function _doSafeTransferAcceptanceCheck(to) {
+                // 0x39150de8 = onERC1155Received(address,address,uint256,uint256)
+                _generalSafeTransferAcceptanceCheck(to, 0x39150de800000000000000000000000000000000000000000000000000000000)
+            }
+
+            /// @dev check that the receiving party--potentially a contract--allows receipt of ERC1155s
+            /// @param to the receiver of the erc1155 being sent
+            function _doSafeBatchTransferAcceptanceCheck(to) {
+                // dc2fe90a = onERC1155BatchReceived(address,address,address,uint256[],uint256[])
+                _generalSafeTransferAcceptanceCheck(to, 0xdc2fe90a00000000000000000000000000000000000000000000000000000000)
+            }
+
+            /// @param to the receiver of the erc1155 being sent
+            /// @param interface the interface to check exists for the receiver `to`.
+            /// @dev Must be in 32 bytes, e.g.: "0x39150de800000000000000000000000000000000000000000000000000000000"
+            function _generalSafeTransferAcceptanceCheck(to, interface) {
                 if eq(extcodesize(to), 0) { leave } // receiver is not a contract
 
                 // call onERC1155Received(address,address,uint256,uint256) in the receiving contract `to`
                 // @dev for safety reasons, we zero out all the calldata
                 mstore(0x00, 0x00) // first zero-out return data location in scratch space
                 // now construct the calldata with zeroed out parameters
-                mstore(getMemPtr(), 0x39150de800000000000000000000000000000000000000000000000000000000)
+                mstore(getMemPtr(), interface)
                 mstore(add(getMemPtr(), 0x20), 0x0000000000000000000000000000000000000000000000000000000000000000)
                 mstore(add(getMemPtr(), 0x40), 0x0000000000000000000000000000000000000000000000000000000000000000)
                 mstore(add(getMemPtr(), 0x60), 0x0000000000000000000000000000000000000000000000000000000000000000)
@@ -326,11 +353,12 @@ object "ERC1155Yul" {
                 require(success)
                 // read the reponse like a function signature
                 let response := decodeAsSelector(mload(0x00))
-                require(eq(response, 0x39150de8)) // 0x39150de8 = onERC1155Received(address,address,uint256,uint256)
+                let requiredInterface := decodeAsSelector(interface)
+                require(eq(response, requiredInterface))
             }
 
-             /// @dev helper to construct and collect the balance of for multiple accounts and token Ids
-             /// @dev since this is a dynamic array, the function returns the starting and ending locations in memory where the array is stored
+            /// @dev helper to construct and collect the balance of for multiple accounts and token Ids
+            /// @dev since this is a dynamic array, the function returns the starting and ending locations in memory where the array is stored
             function _createBalanceOfBatch(posAccounts, posIds) -> startsAt, endsAt {
                 let lenAccounts := decodeAsUint(div(posAccounts, 0x20))
                 let lenIds := decodeAsUint(div(posIds, 0x20))
