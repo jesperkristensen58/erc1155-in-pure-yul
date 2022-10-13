@@ -7,7 +7,17 @@
 This is a pure Yul implementation of the ERC1155 Token contract.
 Some mock contracts (under `contracts/mocks`) accompy the main Yul contract for testing purposes.
 
-# How to Test
+# How to Compile & Test
+
+Run
+
+```shell
+./test.sh
+```
+
+## How to Test in Detail
+
+`Test.sh` under hood calls:
 
 ```shell
 node scripts/compile.js # compiles the Yul contract as well as the mock contracts
