@@ -7,9 +7,6 @@
  * @date October, 2022
  */
 
-//// FINISH THIS -- ONLY 2 THINGS REMAIN :---)
-//// TODO: DO THE EVENTS!!!
-
 object "ERC1155Yul" {
     /**
      * @notice Constructor
