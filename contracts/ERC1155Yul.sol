@@ -156,6 +156,8 @@ object "ERC1155Yul" {
 
                 _burn(from, id, amount)
 
+                emitTransferSingle(caller(), from, zeroAddress(), id, amount)
+
                 returnNothing()
             }
             case 0x6b20c454 /* burnBatch(address from, uint256[] ids, uint256[] amounts) */ {
@@ -167,25 +169,29 @@ object "ERC1155Yul" {
 
                 _burnBatch(from, posIds, posAmounts)
 
+                emitTransferBatch(caller(), from, zeroAddress(), posIds, posAmounts)
+
                 returnNothing()
             }
             case 0xa22cb465 /* setApprovalForAll(address operator, bool approved) */ {
-                let account := caller()
+                let _owner := caller()
                 let operator := decodeAsAddress(0)
-                require(iszero(eq(account, operator))) // account != operator
+                require(iszero(eq(_owner, operator))) // account != operator
 
                 let approved := decodeAsUint(1)
 
-                sstore(_getOperatorApprovalSlot(account, operator), approved)
+                sstore(_getOperatorApprovalSlot(_owner, operator), approved)
+
+                emitApprovalForAll(_owner, operator, approved)
 
                 returnNothing()
             }
             case 0xe985e9c5 /* isApprovedForAll(address account, address operator) */ {
-                let account := decodeAsAddress(0)
+                let _owner := decodeAsAddress(0)
                 let operator := decodeAsAddress(1)
-                require(iszero(eq(account, operator)))
+                require(iszero(eq(_owner, operator)))
 
-                let approved := _isApprovedForAll(account, operator)
+                let approved := _isApprovedForAll(_owner, operator)
 
                 returnUint(approved) // bool behaves like uint
             }
@@ -203,6 +209,8 @@ object "ERC1155Yul" {
 
                 // check that the receiving address can receive erc1155s
                 _doSafeTransferAcceptanceCheck(to)
+
+                emitTransferSingle(caller(), from, to, id, amount)
 
                 returnNothing()                
             }
@@ -227,6 +235,8 @@ object "ERC1155Yul" {
                 }
 
                 _doSafeBatchTransferAcceptanceCheck(to)
+
+                emitTransferBatch(caller(), from, to, posIds, posAmounts)
 
                 returnNothing()
             }
@@ -280,6 +290,12 @@ object "ERC1155Yul" {
                 }
                 
                 log4(0x00, totalSize, signatureHash, operator, from, to)
+            }
+
+            function emitApprovalForAll(_owner, operator, approved) {
+                let signatureHash := 0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31
+                mstore(0x00, approved)
+                log3(0x00, 0x20, signatureHash, _owner, operator)
             }
 
             /**

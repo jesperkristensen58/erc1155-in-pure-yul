@@ -695,6 +695,14 @@ describe("For the ERC1155 Pure Yul Contract", function () {
       .withArgs(owner.address, ethers.constants.AddressZero, alice.address, 1, 4);
     });
 
+    it("Should emit an event on burn", async () => {
+      tx = await erc1155yul.mint(alice.address, 0, 4);
+      await tx.wait();
+
+      await expect(erc1155yul.burn(alice.address, 0, 2)).to.emit(erc1155yul, "TransferSingle")
+      .withArgs(owner.address, alice.address, ethers.constants.AddressZero, 0, 2);
+    });
+
     it("Should emit an event on mintBatch", async () => {
 
       expect(await erc1155yul.balanceOfBatch([alice.address, alice.address], [1, 2])).to.deep.equal([0, 0]);
@@ -708,5 +716,59 @@ describe("For the ERC1155 Pure Yul Contract", function () {
       .withArgs(owner.address, ethers.constants.AddressZero, bob.address, [1, 4, 10], [1, 2, 8]);
     })
 
+    it("Should emit an event on burnBatch", async () => {
+      expect(await erc1155yul.balanceOfBatch([alice.address, alice.address], [1, 2])).to.deep.equal([0, 0]);
+
+      // first mint
+      await expect(erc1155yul.mintBatch(alice.address, [1, 2], [4, 2])).to.emit(erc1155yul, "TransferBatch")
+      .withArgs(owner.address, ethers.constants.AddressZero, alice.address, [1, 2], [4, 2]);
+
+      expect(await erc1155yul.balanceOfBatch([alice.address, alice.address], [1, 2])).to.deep.equal([4, 2]);
+
+      await expect(erc1155yul.burnBatch(alice.address, [1, 2], [4, 2])).to.emit(erc1155yul, "TransferBatch")
+      .withArgs(owner.address, alice.address, ethers.constants.AddressZero, [1, 2], [4, 2]);
+
+      // back to zeros
+      expect(await erc1155yul.balanceOfBatch([alice.address, alice.address], [1, 2])).to.deep.equal([0, 0]);
+    })
+
+    it("Should emit events on transfers", async () => {
+      tx = await erc1155yul.mint(alice.address, 40, 21);
+      await tx.wait();
+      tx = await erc1155yul.mint(alice.address, 1, 2);
+      await tx.wait();
+      expect(await erc1155yul.balanceOf(alice.address, 40)).to.equal(21);
+
+      expect(await erc1155yul.connect(alice).safeTransferFrom(alice.address, bob.address, 40, 21)).to.emit(erc1155yul, "TransferSingle")
+      .withArgs(alice.address, alice.address, bob.address, 40, 21);
+
+      expect(await erc1155yul.connect(bob).safeTransferFrom(bob.address, alice.address, 40, 1)).to.emit(erc1155yul, "TransferSingle")
+      .withArgs(bob.address, bob.address, alice.address, 40, 1);
+
+      // try batch transfer
+      expect(await erc1155yul.connect(alice).safeBatchTransferFrom(alice.address, bob.address, [40, 1], [1, 1])).to.emit(erc1155yul, "TransferBatch")
+      .withArgs(alice.address, alice.address, bob.address, [40, 1], [1, 1]);
+
+      // try with 1 element
+      expect(await erc1155yul.connect(alice).safeBatchTransferFrom(alice.address, bob.address, [1], [1])).to.emit(erc1155yul, "TransferBatch")
+      .withArgs(alice.address, alice.address, bob.address, [1], [1]);
+    });
+
+    it("Should emit evens on setting approvals", async () => {
+      expect(await erc1155yul.isApprovedForAll(bob.address, owner.address)).to.equal(false);
+      expect(await erc1155yul.connect(owner).setApprovalForAll(bob.address, true)).to.emit(erc1155yul, "emitApprovalForAll")
+      .withArgs(owner.address, bob.address, true);
+      expect(await erc1155yul.isApprovedForAll(bob.address, owner.address)).to.equal(true);
+
+      expect(await erc1155yul.isApprovedForAll(owner.address, alice.address)).to.equal(false);
+      expect(await erc1155yul.connect(alice).setApprovalForAll(owner.address, true)).to.emit(erc1155yul, "emitApprovalForAll")
+      .withArgs(alice.address, owner.address, true);
+      expect(await erc1155yul.isApprovedForAll(owner.address, alice.address)).to.equal(true);
+
+      expect(await erc1155yul.isApprovedForAll(alice.address, bob.address)).to.equal(false);
+      expect(await erc1155yul.connect(bob).setApprovalForAll(alice.address, true)).to.emit(erc1155yul, "emitApprovalForAll")
+      .withArgs(bob.address, alice.address, true);
+      expect(await erc1155yul.isApprovedForAll(alice.address, bob.address)).to.equal(true);
+    });
   }); // end of deployed code tests
 }); // end of all tests
