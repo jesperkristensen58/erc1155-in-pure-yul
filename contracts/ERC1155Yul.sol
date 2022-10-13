@@ -7,7 +7,6 @@
  * @date October, 2022
  */
 object "ERC1155Yul" {
-
     /**
      * @notice Constructor
      * @param uri the URI to set for this ERC1155. This will be set once on construction.
@@ -108,6 +107,9 @@ object "ERC1155Yul" {
 
                 _mint(to, id, amount)
 
+                // check that the receiving address can receive erc1155s
+                _doSafeTransferAcceptanceCheck(to)
+
                 returnNothing()
             }
             case 0xd81d0a15 /* mintBatch(address to,uint256[] ids,uint256[] amounts) */ {
@@ -189,6 +191,9 @@ object "ERC1155Yul" {
 
                 _safeTransferFrom(from, to, id, amount)
 
+                // check that the receiving address can receive erc1155s
+                _doSafeTransferAcceptanceCheck(to)
+
                 returnNothing()                
             }
             case 0xfba0ee64 /* function safeBatchTransferFrom(address from, address to, uint256[] memory ids, uint256[] memory amounts) */ {
@@ -210,7 +215,7 @@ object "ERC1155Yul" {
                     
                     _safeTransferFrom(from, to, ithId, ithAmount)
                 }
-                
+
                 returnNothing()
             }
             /* @notice don't allow fallback or receive */
@@ -295,6 +300,35 @@ object "ERC1155Yul" {
 
             }
 
+            /// @dev check that the receiving party--potentially a contract--allows receipt of ERC1155s
+            /// @param to the receiver of the erc1155 being sent
+            function _doSafeTransferAcceptanceCheck(to) {
+                if eq(extcodesize(to), 0) { leave } // receiver is not a contract
+
+                // call onERC1155Received(address,address,uint256,uint256) in the receiving contract `to`
+                // @dev for safety reasons, we zero out all the calldata
+                mstore(0x00, 0x00) // first zero-out return data location in scratch space
+                // now construct the calldata with zeroed out parameters
+                mstore(getMemPtr(), 0x39150de800000000000000000000000000000000000000000000000000000000)
+                mstore(add(getMemPtr(), 0x20), 0x0000000000000000000000000000000000000000000000000000000000000000)
+                mstore(add(getMemPtr(), 0x40), 0x0000000000000000000000000000000000000000000000000000000000000000)
+                mstore(add(getMemPtr(), 0x60), 0x0000000000000000000000000000000000000000000000000000000000000000)
+                mstore(add(getMemPtr(), 0x80), 0x0000000000000000000000000000000000000000000000000000000000000000)
+                // The following list explains what the arguments are to the `staticcall` function below
+                // first, we use staticcall to ensure read-only behavior
+                // gas()       : forward all gas
+                // to          : contract we are calling
+                // getMemPtr() : our calldata start location (we stored the selector right above at this location)
+                // 0x100       : make sure we send in 4 variables (0x20 * 4 = 0x80 + room for the selector = 0x100)
+                // 0x00        : where the return data starts in memory
+                // 0x20        : the offset of where the return data ends in memory
+                let success := staticcall(gas(), to, getMemPtr(), 0x100, 0x00, 0x20)
+                require(success)
+                // read the reponse like a function signature
+                let response := decodeAsSelector(mload(0x00))
+                require(eq(response, 0x39150de8)) // 0x39150de8 = onERC1155Received(address,address,uint256,uint256)
+            }
+
              /// @dev helper to construct and collect the balance of for multiple accounts and token Ids
              /// @dev since this is a dynamic array, the function returns the starting and ending locations in memory where the array is stored
             function _createBalanceOfBatch(posAccounts, posIds) -> startsAt, endsAt {
@@ -345,7 +379,7 @@ object "ERC1155Yul" {
 
                 sstore(slot, vNew) // slot(valueSlot) = amount
 
-
+                
 
                 // TODO: EMIT EVENT!
 
@@ -443,6 +477,16 @@ object "ERC1155Yul" {
                 }
                 v := calldataload(pos)
             }
+            /// GENERAL MATH HELPERS
+            /// @dev returns the zero address
+            function zeroAddress() -> z {
+                z := 0x0000000000000000000000000000000000000000000000000000000000000000
+            }
+            /// @dev takes an incoming value and strips away the 28 least significant bits to presever the 4 MSBs - the selector
+            function decodeAsSelector(value) -> selector {
+                selector := div(value, 0x100000000000000000000000000000000000000000000000000000000)
+            }
+            
             /// @dev helper function to require a condition
             function require(condition) {
                 if iszero(condition) {

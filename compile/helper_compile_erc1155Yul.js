@@ -2,26 +2,8 @@ const path = require('path');
 const fs = require('fs');
 const solc = require('solc');
 
-const erc1155Path = path.resolve(__dirname, '../', 'contracts', 'ERC1155Yul.sol');
-const source = fs.readFileSync(erc1155Path, 'utf-8');
-
-async function compileERC1155YulContract() {
-
-    var input = {
-        language: 'Yul',
-        sources: {
-            'ERC1155Yul.sol' : {
-                content: source
-            }
-        },
-        settings: {
-            outputSelection: {
-                '*': {
-                    '*': [ "evm.bytecode" ]
-                }
-            }
-        }
-    }; 
+/// @notice compile the ERC1155Yul contract
+async function compileERC1155YulContract(input) {
 
     console.log("--------------------------------");
 
@@ -52,4 +34,6 @@ async function compileERC1155YulContract() {
      return bytecode;
 }
 
-compileERC1155YulContract();
+module.exports = {
+    compileERC1155YulContract
+}

@@ -1,5 +1,6 @@
+/// @title Deploys the ERC1155 Yul Contract
+/// @author Jesper Kristensen
 const hre = require("hardhat");
-const fs = require("fs")
 const path = require("path")
 
 async function main() {
@@ -8,8 +9,7 @@ async function main() {
   var bytecode = require('../build/ERC1155Yul.bytecode.json').object;
 
   const ERC1155YulContract = await hre.ethers.getContractFactory(abi, bytecode);
-  const erc1155yul = await ERC1155YulContract.deploy("test string");
-
+  const erc1155yul = await ERC1155YulContract.deploy("https://token-cdn-domain/{id}.json");
   await erc1155yul.deployed();
 
   console.log(
